@@ -98,40 +98,39 @@ def query_issue(project, jql_filter, max):
     }
     return response(query)
 
-def jira_agent():
-    client = anthropic.Anthropic(
-        api_key=auth_token,
-        base_url=base_url,
-        default_headers=custom_headers
+client = anthropic.Anthropic(
+    api_key=auth_token,
+    base_url=base_url,
+    default_headers=custom_headers
+)
+
+def jira_agent(content):
+    runner = client.beta.messages.tool_runner(
+        model=default_model,
+        max_tokens=10000,
+        tools=[get_issue, query_issue],
+        messages=[
+            {
+                "role": 'user',
+                "content": f'''
+                            {prompt}
+                            {content}
+                            ''',
+            }
+        ]
     )
 
-    content = input("\nInput: ")
+    for event in runner:
+        if event.type == "message":
+            message = event
 
-    if content.lower() == "exit":
-        print("\nThank you for using Jira Agent.")
-        exit()
-    else:
-        runner = client.beta.messages.tool_runner(
-            model=default_model,
-            max_tokens=10000,
-            tools=[get_issue, query_issue],
-            messages=[
-                {
-                    "role": 'user',
-                    "content": f'''
-                                {prompt}
-                                {content}
-                                ''',
-                }
-            ]
-        )
+    text_blocks = [block.text for block in message.content if block.type == "text"]
+    return "\n".join(text_blocks) if text_blocks else "No response"
 
-        for event in runner:
-            if event.type == "message":
-                message = event
-
-        text_blocks = [block.text for block in message.content if block.type == "text"]
-        print("\n".join(text_blocks) if text_blocks else "No response")
-
-while True:
-    jira_agent()
+if __name__ == "__main__":
+    while True:
+        content = input("\nInput: ")
+        if content.lower() == "exit":
+            print("\nThank you for using Jira Agent.")
+            break
+        print(jira_agent(content))
