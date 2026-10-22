@@ -4,34 +4,19 @@ import json
 import requests
 from requests.auth import HTTPBasicAuth
 from dotenv import load_dotenv
-import anthropic
-from anthropic import beta_tool
 
-load_dotenv('jira.env')
-load_dotenv('anthropic.env')
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+load_dotenv(os.path.join(BASE_DIR, 'jira.env'))
 
-file = open("prompt.txt", "r", encoding="utf-8")
-prompt = file.read()
 jira_domain = os.getenv('jira_domain')
 jira_pat = os.getenv('jira_pat')
 jira_email = os.getenv('jira_email')
-base_url = os.getenv("ANTHROPIC_BASE_URL")
-auth_token = os.getenv("ANTHROPIC_AUTH_TOKEN")
-default_model = os.getenv("ANTHROPIC_MODEL")
-custom_headers_raw = os.getenv("ANTHROPIC_CUSTOM_HEADERS")
-custom_headers = {}
-if custom_headers_raw:
-    try:
-        custom_headers = json.loads(custom_headers_raw)
-    except:
-        for header in custom_headers_raw.split(","):
-            if ":" in header:
-                key, value = header.split(":", 1)
-                custom_headers[key.strip()] = value.strip()
+
 header = {
   "Accept": "application/json",
   "Content-Type": "application/json"
 }
+
 url = jira_domain
 auth = HTTPBasicAuth(jira_email, jira_pat)
 
@@ -62,7 +47,6 @@ def response(query):
         })
     return json.dumps(formatted,indent=2, separators=(",",":"))
 
-@beta_tool
 def get_issue(issue_key):
     query = {
         'jql' : f'key = {issue_key}',
@@ -80,7 +64,6 @@ def get_issue(issue_key):
     }
     return response(query)
 
-@beta_tool
 def query_issue(project, jql_filter, max):
     query = {
         'jql' : f'project = {project} AND {jql_filter}',
@@ -98,40 +81,23 @@ def query_issue(project, jql_filter, max):
     }
     return response(query)
 
-def jira_agent():
-    client = anthropic.Anthropic(
-        api_key=auth_token,
-        base_url=base_url,
-        default_headers=custom_headers
-    )
 
-    content = input("\nInput: ")
+if __name__ == "__main__":
+    import argparse
 
-    if content.lower() == "exit":
-        print("\nThank you for using Jira Agent.")
-        exit()
+    parser = argparse.ArgumentParser(description="Search Jira issues")
+    sub = parser.add_subparsers(dest="cmd", required=True)
+
+    p_get = sub.add_parser("get", help="get one issue by key")
+    p_get.add_argument("key")
+
+    p_q = sub.add_parser("query", help="query issues in a project with JQL")
+    p_q.add_argument("project")
+    p_q.add_argument("jql_filter")
+    p_q.add_argument("--max", type=int, default=25)
+
+    args = parser.parse_args()
+    if args.cmd == "get":
+        print(get_issue(args.key))
     else:
-        runner = client.beta.messages.tool_runner(
-            model=default_model,
-            max_tokens=10000,
-            tools=[get_issue, query_issue],
-            messages=[
-                {
-                    "role": 'user',
-                    "content": f'''
-                                {prompt}
-                                {content}
-                                ''',
-                }
-            ]
-        )
-
-        for event in runner:
-            if event.type == "message":
-                message = event
-
-        text_blocks = [block.text for block in message.content if block.type == "text"]
-        print("\n".join(text_blocks) if text_blocks else "No response")
-
-while True:
-    jira_agent()
+        print(query_issue(args.project, args.jql_filter, args.max))
