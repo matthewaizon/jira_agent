@@ -8,8 +8,6 @@ from dotenv import load_dotenv
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 load_dotenv(os.path.join(BASE_DIR, 'jira.env'))
 
-with open(os.path.join(BASE_DIR, "prompt.txt"), "r", encoding="utf-8") as file:
-    prompt = file.read()
 jira_domain = os.getenv('jira_domain')
 jira_pat = os.getenv('jira_pat')
 jira_email = os.getenv('jira_email')
